@@ -361,7 +361,13 @@ class TaskExecutor:
             res['_ansible_ignore_errors'] = task_fields.get('ignore_errors')
 
             # gets templated here unlike rest of loop_control fields, depends on loop_var above
-            res['_ansible_item_label'] = templar.template(label, cache=False)
+            try:
+                res['_ansible_item_label'] = templar.template(label, cache=False)
+            except AnsibleUndefinedVariable as e:
+                res.update({
+                    'failed': True,
+                    'msg': 'Failed to template loop_control.label: %s' % to_text(e)
+                })
 
             self._final_q.put(
                 TaskResult(
@@ -806,7 +812,7 @@ class TaskExecutor:
 
         if int(async_result.get('finished', 0)) != 1:
             if async_result.get('_ansible_parsed'):
-                return dict(failed=True, msg="async task did not complete within the requested time")
+                return dict(failed=True, msg="async task did not complete within the requested time - %ss" % self._task.async_val)
             else:
                 return dict(failed=True, msg="async task produced unparseable results", async_result=async_result)
         else:
