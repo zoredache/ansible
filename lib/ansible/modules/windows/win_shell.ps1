@@ -47,6 +47,8 @@ $executable = Get-AnsibleParam -obj $params -name "executable" -type "path"
 $creates = Get-AnsibleParam -obj $params -name "creates" -type "path"
 $removes = Get-AnsibleParam -obj $params -name "removes" -type "path"
 $stdin = Get-AnsibleParam -obj $params -name "stdin" -type "str"
+$extra_exec_args = Get-AnsibleParam -obj $params -name "extra_exec_args" -type "str"
+$debug_level = Get-AnsibleParam -obj $params -name "_ansible_verbosity" -type "int"
 
 $raw_command_line = $raw_command_line.Trim()
 
@@ -73,10 +75,12 @@ If(-not $executable -or $executable -eq "powershell") {
     # Base64 encode the command so we don't have to worry about the various levels of escaping
     $encoded_command = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($raw_command_line))
 
-    if ($stdin) {
-        $exec_args = "-encodedcommand $encoded_command"
-    } else {
-        $exec_args = "-noninteractive -encodedcommand $encoded_command"
+    $exec_args = "-encodedcommand $encoded_command"
+    if (-not $stdin) {
+        $exec_args = "-noninteractive $exec_args"
+    }
+    if ($extra_exec_args) {
+        $exec_args = "$extra_exec_args $exec_args"
     }
 }
 Else {
@@ -86,6 +90,12 @@ Else {
         $exec_application = "$($exec_application).exe"
     }
     $exec_args = "/c $raw_command_line"
+    if ($extra_exec_args) {
+        $exec_args = "$extra_exec_args $exec_args"
+    }
+}
+if ($debug_level -ge 1) {
+    $result['exec_args'] = $exec_args
 }
 
 $command = "$exec_application $exec_args"
@@ -114,7 +124,7 @@ try {
 
 # TODO: decode CLIXML stderr output (and other streams?)
 $result.stdout = $command_result.stdout
-$result.stderr = Cleanse-Stderr $command_result.stderr 
+$result.stderr = Cleanse-Stderr $command_result.stderr
 $result.rc = $command_result.rc
 
 $end_datetime = [DateTime]::UtcNow

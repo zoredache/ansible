@@ -1,3 +1,16 @@
+- name: check for powershell profiles
+  win_command: |
+      cmd.exe /c powershell.exe -noprofile -encodedcommand {{
+      "$PROFILE.CurrentUserAllHosts, $PROFILE.CurrentUserCurrentHost,
+      $PROFILE.AllUsersAllHosts, $PROFILE.AllUsersCurrentHost |
+      Test-Path | ConvertTo-Json" | b64encode(encoding='utf-16-le') -}}
+  register: commandout
+
+- name: name system should have no profiles
+  assert:
+    that:
+    - "'true' not in commandout.stdout"
+
 - name: execute a powershell cmdlet
   win_shell: Write-Output "hello from Ansible"
   register: shellout
@@ -257,3 +270,57 @@
     - nonascii_output.stdout_lines|count == 1
     - nonascii_output.stdout_lines[0] == 'über den Fußgängerübergang gehen'
     - nonascii_output.stderr == ''
+
+- name: execute a cmd.exe shell task
+  win_shell: 'Echo hello from Ansible'
+  args:
+    executable: cmd.exe
+  register: shellout
+
+- name: validate result
+  assert:
+    that:
+    - shellout is successful
+    - shellout is changed
+    - shellout.cmd == 'Echo hello from Ansible'
+    - shellout.delta is match('^\d:(\d){2}:(\d){2}.(\d){6}$')
+    - shellout.end is match('^(\d){4}\-(\d){2}\-(\d){2} (\d){2}:(\d){2}:(\d){2}.(\d){6}$')
+    - shellout.rc == 0
+    - shellout.start is match('^(\d){4}\-(\d){2}\-(\d){2} (\d){2}:(\d){2}:(\d){2}.(\d){6}$')
+    - shellout.stdout == "hello from Ansible\r\n"
+    - shellout.stdout_lines == ["hello from Ansible"]
+
+- name: execute a cmd.exe shell task with extra_exec_args
+  win_shell: 'Echo hello from Ansible'
+  args:
+    executable: cmd.exe
+    extra_exec_args: '/q'
+  register: shellout
+
+- name: validate result
+  assert:
+    that:
+    - shellout is successful
+    - shellout is changed
+    - shellout.cmd == 'Echo hello from Ansible'
+    - shellout.rc == 0
+    - shellout.stdout == "hello from Ansible\r\n"
+    - shellout.stdout_lines == ["hello from Ansible"]
+    - shellout.exec_args == "/q /c Echo hello from Ansible"
+
+- name: execute a powershell cmdlet with extra_exec_args
+  win_shell: Write-Output "hello from Ansible"
+  args:
+    extra_exec_args: '-noprofile'
+  register: shellout
+
+- name: validate result
+  assert:
+    that:
+    - shellout is successful
+    - shellout is changed
+    - shellout.cmd == 'Write-Output "hello from Ansible"'
+    - shellout.rc == 0
+    - shellout.stdout == "hello from Ansible\r\n"
+    - shellout.stdout_lines == ["hello from Ansible"]
+    - shellout.exec_args is match("^-noprofile -noninteractive -encodedcommand.*")
